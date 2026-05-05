@@ -1,0 +1,33 @@
+{
+    "name": "infra",
+    "version": "1.0.0",
+    "description": "",
+    "main": "index.js",
+    "directories": {
+        "lib": "lib"
+    },
+    "scripts": {
+        "diff": "npx cdk diff",
+        "build": "npx tsc",
+        "bootstrap": "npx cdk bootstrap",
+        "destroy": "npx cdk destroy --all",
+        "deploy": "npx cdk deploy --all",
+        "synth": "npx cdk synth"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "type": "commonjs",
+    "dependencies": {
+        "aws-cdk-lib": "^2.248.0",
+        "constructs": "^10.6.0"
+    },
+    "devDependencies": {
+        "@types/node": "^25.6.0",
+        "aws-cdk": "^2.1118.0",
+        "esbuild": "^0.28.0",
+        "source-map-support": "^0.5.21",
+        "ts-node": "^10.9.2",
+        "typescript": "^6.0.2"
+    }
+}

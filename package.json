@@ -1,0 +1,19 @@
+{
+  "name": "final",
+  "version": "1.0.0",
+  "description": "A production-grade, full-stack SaaS migration tool that mirrors what AWS Transform does — at micro scale. **Real AWS DMS** migration, not a simulation.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "cli-table3": "^0.6.5",
+    "colors": "^1.4.0",
+    "mysql2": "^3.22.0",
+    "pg": "^8.20.0"
+  }
+}

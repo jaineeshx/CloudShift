@@ -1,0 +1,72 @@
+{
+  "appName": "Global-ERP-Legacy-Monolith",
+  "framework": "Struts 1.2 / EJB 2.1",
+  "runtime": "Java 1.6 (End-of-Life)",
+  "environment": "on-premises-production",
+  "database": {
+    "type": "oracle",
+    "version": "11.2g",
+    "host": "hq-db-cluster-01.internal",
+    "port": 1521,
+    "sizeGB": 1850,
+    "name": "ERP_PROD_DB",
+    "connectionType": "thick-client"
+  },
+  "server": {
+    "type": "Bare Metal",
+    "instanceType": "HP ProLiant Gen8",
+    "os": "Windows Server 2008 R2",
+    "count": 1,
+    "cpuUnits": 32,
+    "memoryGB": 128
+  },
+  "services": [
+    {
+      "name": "monolith-app-server",
+      "port": 7001,
+      "type": "WebLogic"
+    },
+    {
+      "name": "legacy-report-worker",
+      "port": 9000,
+      "type": "RMI"
+    },
+    {
+      "name": "ftp-sync-service",
+      "port": 21,
+      "type": "FTP"
+    }
+  ],
+  "dependencies": [
+    "struts:1.2.9",
+    "log4j:1.2.14 (Vulnerable)",
+    "commons-collections:3.2.1",
+    "axis:1.4",
+    "servlet-api:2.4"
+  ],
+  "ssl": false,
+  "auth": {
+    "type": "Hardcoded / LDAP",
+    "provider": "Active Directory 2008"
+  },
+  "monitoring": false,
+  "containerized": false,
+  "cicd": false,
+  "ports": [
+    21,
+    80,
+    1521,
+    7001,
+    7002,
+    9000
+  ],
+  "encryption": {
+    "atRest": false,
+    "inTransit": false
+  },
+  "compliance": [
+    "None"
+  ],
+  "businessCriticality": "Mission Critical (Tier 0)",
+  "technicalDebt": "High - Spagetti Code / No documentation"
+}
