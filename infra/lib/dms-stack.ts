@@ -58,7 +58,8 @@ export class DmsStack extends cdk.Stack {
       port: 3306,
       databaseName: 'cloudshift_legacy',
       username: 'dms_user',
-      password: 'DmsUser2024!',
+      // SECURITY: Credential retrieved from Secrets Manager — never hardcoded
+      password: cdk.SecretValue.secretsManager('cloudshift/mysql/dms-user', { jsonField: 'password' }).unsafeUnwrap(),
       tags: [{ key: 'Project', value: 'CloudShift' }]
     });
 

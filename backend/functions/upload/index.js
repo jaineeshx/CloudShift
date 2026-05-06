@@ -17,7 +17,17 @@ exports.handler = async (event) => {
     let configObj = config;
     if (typeof config === 'string') {
       try { configObj = JSON.parse(config); }
-      catch { configObj = yaml.load(config); }
+      catch {
+        // SECURITY: Use SAFE_SCHEMA to prevent arbitrary code execution via YAML deserialization.
+        // yaml.load() with DEFAULT_SCHEMA can instantiate JS objects — SAFE_SCHEMA allows only
+        // standard YAML types (strings, numbers, booleans, arrays, maps).
+        configObj = yaml.load(config, { schema: yaml.SAFE_SCHEMA });
+      }
+    }
+
+    // SECURITY: Validate that the parsed result is a plain object before processing
+    if (typeof configObj !== 'object' || configObj === null || Array.isArray(configObj)) {
+      return respond(400, { error: 'Config must be a JSON/YAML object' });
     }
 
     const sessionId = uuidv4();

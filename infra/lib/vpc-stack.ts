@@ -28,7 +28,9 @@ export class VpcStack extends cdk.Stack {
       description: 'CloudShift EC2 MySQL source',
       allowAllOutbound: true
     });
-    this.sourceSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(22), 'SSH');
+    // SECURITY: SSH access restricted to VPC CIDR only. Use AWS SSM Session Manager
+    // for interactive access instead of opening SSH to the internet.
+    // this.sourceSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(22), 'SSH'); // REMOVED: never allow SSH from internet
     this.sourceSecurityGroup.addIngressRule(ec2.Peer.ipv4(this.vpc.vpcCidrBlock), ec2.Port.tcp(3306), 'MySQL from VPC');
 
     // RDS PostgreSQL target security group

@@ -152,25 +152,45 @@ export class ApiStack extends cdk.Stack {
       defaultCorsPreflightOptions: {
         allowOrigins: apigateway.Cors.ALL_ORIGINS,
         allowMethods: apigateway.Cors.ALL_METHODS,
-        allowHeaders: ['Content-Type', 'Authorization']
+        allowHeaders: ['Content-Type', 'Authorization', 'X-Amz-Date', 'X-Api-Key', 'X-Amz-Security-Token']
       }
     });
 
+    // SECURITY: Use API key + usage plan for rate-limiting on top of IAM auth
+    const apiKey = api.addApiKey('CloudShiftApiKey', {
+      apiKeyName: 'cloudshift-api-key',
+      description: 'CloudShift API key for rate limiting'
+    });
+
+    const usagePlan = api.addUsagePlan('CloudShiftUsagePlan', {
+      name: 'CloudShift Standard Plan',
+      throttle: { rateLimit: 100, burstLimit: 200 },
+      quota: { limit: 10000, period: apigateway.Period.DAY }
+    });
+    usagePlan.addApiKey(apiKey);
+    usagePlan.addApiStage({ stage: api.deploymentStage });
+
+    // SECURITY: IAM authorizer — all callers must use AWS Signature V4
+    const iamAuthMethod: apigateway.MethodOptions = {
+      authorizationType: apigateway.AuthorizationType.IAM,
+      apiKeyRequired: true
+    };
+
     const uploadResource = api.root.addResource('upload');
-    uploadResource.addMethod('POST', new apigateway.LambdaIntegration(uploadFn));
+    uploadResource.addMethod('POST', new apigateway.LambdaIntegration(uploadFn), iamAuthMethod);
 
     const assessResource = api.root.addResource('assess');
-    assessResource.addMethod('POST', new apigateway.LambdaIntegration(assessFn));
+    assessResource.addMethod('POST', new apigateway.LambdaIntegration(assessFn), iamAuthMethod);
 
     const planResource = api.root.addResource('plan');
-    planResource.addMethod('POST', new apigateway.LambdaIntegration(planFn));
+    planResource.addMethod('POST', new apigateway.LambdaIntegration(planFn), iamAuthMethod);
 
     const migrateResource = api.root.addResource('migrate');
-    migrateResource.addResource('start').addMethod('POST', new apigateway.LambdaIntegration(migrateStartFn));
-    migrateResource.addResource('status').addMethod('GET', new apigateway.LambdaIntegration(migrateStatusFn));
+    migrateResource.addResource('start').addMethod('POST', new apigateway.LambdaIntegration(migrateStartFn), iamAuthMethod);
+    migrateResource.addResource('status').addMethod('GET', new apigateway.LambdaIntegration(migrateStatusFn), iamAuthMethod);
 
     const dashboardResource = api.root.addResource('dashboard');
-    dashboardResource.addMethod('GET', new apigateway.LambdaIntegration(dashboardFn));
+    dashboardResource.addMethod('GET', new apigateway.LambdaIntegration(dashboardFn), iamAuthMethod);
 
     this.apiUrl = api.url;
 
