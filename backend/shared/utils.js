@@ -59,18 +59,29 @@ async function getFromS3(key) {
   return Buffer.concat(chunks).toString('utf-8');
 }
 
-function corsHeaders() {
+// SECURITY: Never use wildcard CORS. Read the allowed origin from env (set at deploy time).
+// Falls back to localhost for local development only.
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGIN || 'http://localhost:5173')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+
+function corsHeaders(requestOrigin) {
+  // Reflect the origin back only if it is in the allowlist
+  const origin = ALLOWED_ORIGINS.includes(requestOrigin) ? requestOrigin : ALLOWED_ORIGINS[0];
   return {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type,Authorization',
-    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS'
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token',
+    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    'Access-Control-Allow-Credentials': 'true',
+    'Vary': 'Origin'  // Required so CDN/browser caches correctly per origin
   };
 }
 
-function respond(statusCode, body) {
+function respond(statusCode, body, requestOrigin) {
   return {
     statusCode,
-    headers: { 'Content-Type': 'application/json', ...corsHeaders() },
+    headers: { 'Content-Type': 'application/json', ...corsHeaders(requestOrigin) },
     body: JSON.stringify(body)
   };
 }

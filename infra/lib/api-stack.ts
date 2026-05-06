@@ -33,14 +33,19 @@ export class ApiStack extends cdk.Stack {
     cdk.Tags.of(table).add('Project', 'CloudShift');
 
     // ─── S3 Bucket ────────────────────────────────────────────────────────────────
+    // SECURITY: Frontend origin stored in SSM / env. Falls back to localhost for dev.
+    // Set ALLOWED_ORIGIN env var to your deployed frontend URL (e.g. https://cloudshift.example.com)
+    const allowedOrigin = process.env.ALLOWED_ORIGIN || 'http://localhost:5173';
     const bucket = new s3.Bucket(this, 'ConfigsBucket', {
       bucketName: `cloudshift-configs-${this.account}-${this.region}`,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
+      // SECURITY: Restrict CORS to the known frontend origin — not wildcard
       cors: [{
         allowedMethods: [s3.HttpMethods.GET, s3.HttpMethods.PUT, s3.HttpMethods.POST],
-        allowedOrigins: ['*'],
-        allowedHeaders: ['*']
+        allowedOrigins: [allowedOrigin],
+        allowedHeaders: ['Content-Type', 'Authorization', 'X-Amz-Date', 'X-Api-Key', 'X-Amz-Security-Token'],
+        maxAge: 3000
       }]
     });
     cdk.Tags.of(bucket).add('Project', 'CloudShift');
@@ -67,25 +72,35 @@ export class ApiStack extends cdk.Stack {
       actions: ['dms:StartReplicationTask', 'dms:StopReplicationTask', 'dms:DescribeReplicationTasks', 'dms:DescribeTableStatistics'],
       resources: [dmsTaskArn]
     }));
+    // SECURITY: Scope IAM list actions to CloudShift and DMS roles only — not all roles in account
     lambdaRole.addToPolicy(new iam.PolicyStatement({
       actions: ['iam:ListRoles', 'iam:ListAttachedRolePolicies'],
-      resources: ['*']
+      resources: [
+        `arn:aws:iam::${this.account}:role/cloudshift-*`,
+        `arn:aws:iam::${this.account}:role/dms-*`
+      ]
     }));
+    // SECURITY: Scope RDS describe to CloudShift instances only (by tag condition)
     lambdaRole.addToPolicy(new iam.PolicyStatement({
       actions: ['rds:DescribeDBInstances'],
-      resources: ['*']
+      resources: [`arn:aws:rds:${this.region}:${this.account}:db:*`],
+      conditions: {
+        StringEquals: { 'aws:ResourceTag/Project': 'CloudShift' }
+      }
     }));
+    // SECURITY: Scope CloudTrail lookups to DMS events only
     lambdaRole.addToPolicy(new iam.PolicyStatement({
       actions: ['cloudtrail:LookupEvents'],
-      resources: ['*']
+      resources: ['*'],  // CloudTrail LookupEvents does not support resource-level restrictions
+      conditions: {
+        StringEquals: { 'cloudtrail:eventSource': 'dms.amazonaws.com' }
+      }
     }));
-    lambdaRole.addToPolicy(new iam.PolicyStatement({
-      actions: ['ce:GetCostAndUsage'],
-      resources: ['*']
-    }));
+    // SECURITY: ce:GetCostAndUsage has no resource-level scope — removed to follow least-privilege.
+    // Re-add only if the dashboard genuinely needs cost data.
     lambdaRole.addToPolicy(new iam.PolicyStatement({
       actions: ['ec2:DescribeVpcs', 'ec2:DescribeSecurityGroups', 'ec2:DescribeSubnets'],
-      resources: ['*']
+      resources: ['*']  // EC2 Describe actions do not support resource-level restrictions
     }));
 
     // ─── Common Lambda Config ────────────────────────────────────────────────────
@@ -93,7 +108,9 @@ export class ApiStack extends cdk.Stack {
       DYNAMODB_TABLE: table.tableName,
       S3_BUCKET: bucket.bucketName,
       DMS_TASK_ARN: dmsTaskArn,
-      AWS_REGION_NAME: this.region  // avoid overriding reserved AWS_REGION
+      AWS_REGION_NAME: this.region,  // avoid overriding reserved AWS_REGION
+      // SECURITY: Propagate the allowed origin so Lambda CORS headers match S3
+      ALLOWED_ORIGIN: process.env.ALLOWED_ORIGIN || 'http://localhost:5173'
     };
 
     const lambdaDefaults = {
@@ -146,13 +163,16 @@ export class ApiStack extends cdk.Stack {
     });
 
     // ─── API Gateway ──────────────────────────────────────────────────────────────
+    // SECURITY: Restrict CORS to known frontend origin — not wildcard
+    const allowedOriginForCors = process.env.ALLOWED_ORIGIN || 'http://localhost:5173';
     const api = new apigateway.RestApi(this, 'CloudShiftApi', {
       restApiName: 'CloudShift API',
       description: 'CloudShift Migration Intelligence API',
       defaultCorsPreflightOptions: {
-        allowOrigins: apigateway.Cors.ALL_ORIGINS,
-        allowMethods: apigateway.Cors.ALL_METHODS,
-        allowHeaders: ['Content-Type', 'Authorization', 'X-Amz-Date', 'X-Api-Key', 'X-Amz-Security-Token']
+        allowOrigins: [allowedOriginForCors],
+        allowMethods: ['GET', 'POST', 'OPTIONS'],
+        allowHeaders: ['Content-Type', 'Authorization', 'X-Amz-Date', 'X-Api-Key', 'X-Amz-Security-Token'],
+        allowCredentials: true
       }
     });
 

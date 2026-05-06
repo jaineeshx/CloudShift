@@ -3,7 +3,8 @@ const yaml = require('js-yaml');
 const { putSession, uploadToS3, respond } = require('../../shared/utils');
 
 exports.handler = async (event) => {
-  if (event.httpMethod === 'OPTIONS') return respond(200, {});
+  const origin = event.headers?.origin || event.headers?.Origin;
+  if (event.httpMethod === 'OPTIONS') return respond(200, {}, origin);
 
   try {
     let body = event.body;
@@ -11,7 +12,7 @@ exports.handler = async (event) => {
     const parsed = typeof body === 'string' ? JSON.parse(body) : body;
 
     const { config, filename = 'config.json' } = parsed;
-    if (!config) return respond(400, { error: 'Missing config field in request body' });
+    if (!config) return respond(400, { error: 'Missing config field in request body' }, origin);
 
     // Parse config — support JSON string or object or YAML string
     let configObj = config;
@@ -19,15 +20,13 @@ exports.handler = async (event) => {
       try { configObj = JSON.parse(config); }
       catch {
         // SECURITY: Use SAFE_SCHEMA to prevent arbitrary code execution via YAML deserialization.
-        // yaml.load() with DEFAULT_SCHEMA can instantiate JS objects — SAFE_SCHEMA allows only
-        // standard YAML types (strings, numbers, booleans, arrays, maps).
         configObj = yaml.load(config, { schema: yaml.SAFE_SCHEMA });
       }
     }
 
     // SECURITY: Validate that the parsed result is a plain object before processing
     if (typeof configObj !== 'object' || configObj === null || Array.isArray(configObj)) {
-      return respond(400, { error: 'Config must be a JSON/YAML object' });
+      return respond(400, { error: 'Config must be a JSON/YAML object' }, origin);
     }
 
     const sessionId = uuidv4();
@@ -53,10 +52,10 @@ exports.handler = async (event) => {
       sessionId,
       metadata: meta,
       message: 'Config uploaded successfully'
-    });
+    }, origin);
   } catch (err) {
     console.error('Upload error:', err);
-    return respond(500, { error: err.message });
+    return respond(500, { error: err.message }, origin);
   }
 };
 
