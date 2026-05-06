@@ -82,7 +82,9 @@ export class DatabaseStack extends cdk.Stack {
       userData,
       userDataCausesReplacement: true,
       // SECURITY: no key pair — use SSM Session Manager for console access
-      ssmSessionPermissions: true
+      ssmSessionPermissions: true,
+      // SECURITY: IMDSv2 required — prevents SSRF attacks from stealing instance credentials
+      requireImdsv2: true
     });
 
     // SECURITY: Grant EC2 instance access to read its own Secrets Manager secret
@@ -115,17 +117,27 @@ export class DatabaseStack extends cdk.Stack {
       multiAz: false,
       deletionProtection: false,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      backupRetention: cdk.Duration.days(1)
+      backupRetention: cdk.Duration.days(1),
+      // SECURITY: IAM database authentication — short-lived tokens instead of long-lived passwords
+      iamAuthentication: true
     });
     cdk.Tags.of(this.rdsInstance).add('Project', 'CloudShift');
 
     this.postgresEndpoint = this.rdsInstance.dbInstanceEndpointAddress;
 
     // SECURITY: Export private IP only — no public IP exposed
-    new cdk.CfnOutput(this, 'MySQLSourcePrivateIP', { value: this.ec2Instance.instancePrivateIp, exportName: 'CloudShiftMySQLPrivateIP' });
+    new cdk.CfnOutput(this, 'MySQLSourcePrivateIP', { value: this.ec2Instance.instancePrivateIp });
     new cdk.CfnOutput(this, 'PostgresEndpoint', { value: this.rdsInstance.dbInstanceEndpointAddress, exportName: 'CloudShiftPostgresEndpoint' });
     new cdk.CfnOutput(this, 'PostgresSecretArn', { value: this.rdsInstance.secret?.secretArn || '', exportName: 'CloudShiftPostgresSecretArn' });
     new cdk.CfnOutput(this, 'MysqlDmsSecretArn', { value: mysqlDmsSecret.secretArn, exportName: 'CloudShiftMysqlDmsSecretArn' });
+
+    // Low #15: Stack-wide tagging for cost allocation, compliance, and incident ownership
+    const stackTags: Record<string, string> = {
+      'Project': 'CloudShift',
+      'ManagedBy': 'CDK',
+      'Stack': 'CloudShiftDb'
+    };
+    Object.entries(stackTags).forEach(([k, v]) => cdk.Tags.of(this).add(k, v));
 
     // Explicitly keep the private IP export alive to prevent CloudFormation cross-stack deadlock during transition
     this.exportValue(this.ec2Instance.instancePrivateIp);

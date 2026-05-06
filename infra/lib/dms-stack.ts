@@ -109,8 +109,17 @@ export class DmsStack extends cdk.Stack {
 
     this.replicationTaskArn = replicationTask.ref;
 
-    // Outputs
-    new cdk.CfnOutput(this, 'DmsTaskArn', { value: replicationTask.ref, exportName: 'CloudShiftDmsTaskArn' });
-    new cdk.CfnOutput(this, 'DmsInstanceArn', { value: replicationInstance.ref, exportName: 'CloudShiftDmsInstanceArn' });
+    // Low #1: Remove exportName — DMS ARN should not be discoverable via CF exports.
+    // Pass the ARN directly between stacks via CDK references only.
+    new cdk.CfnOutput(this, 'DmsTaskArn', { value: replicationTask.ref });
+    new cdk.CfnOutput(this, 'DmsInstanceArn', { value: replicationInstance.ref });
+
+    // Low #15: Stack-wide tagging
+    const stackTags: Record<string, string> = {
+      'Project': 'CloudShift',
+      'ManagedBy': 'CDK',
+      'Stack': 'CloudShiftDms'
+    };
+    Object.entries(stackTags).forEach(([k, v]) => cdk.Tags.of(this).add(k, v));
   }
 }

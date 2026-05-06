@@ -1,24 +1,33 @@
 const { getSession, updateSession, respond } = require('../../shared/utils');
 
+// Low #7: Strip characters that could cause stored XSS if config values are rendered in frontend
+function sanitizeString(val, maxLen = 200) {
+  return String(val || '').replace(/[<>"';&$`]/g, '').slice(0, maxLen);
+}
+
 exports.handler = async (event) => {
-  if (event.httpMethod === 'OPTIONS') return respond(200, {});
+  const origin = event.headers?.origin || event.headers?.Origin;
+  if (event.httpMethod === 'OPTIONS') return respond(200, {}, origin);
+
+  const requestId = event.requestContext?.requestId || 'local';
 
   try {
     const { sessionId } = event.body ? JSON.parse(event.body) : (event.queryStringParameters || {});
-    if (!sessionId) return respond(400, { error: 'Missing sessionId' });
+    if (!sessionId) return respond(400, { errorCode: 'MISSING_SESSION_ID', error: 'Missing sessionId' }, origin);
 
     const session = await getSession(sessionId);
-    if (!session) return respond(404, { error: 'Session not found' });
+    if (!session) return respond(404, { errorCode: 'SESSION_NOT_FOUND', error: 'Session not found' }, origin);
 
     const { config, metadata } = session;
     const score = runHeuristicAssessment(config, metadata);
 
     await updateSession(sessionId, { status: 'assessed', assessment: score });
 
-    return respond(200, { sessionId, assessment: score });
+    return respond(200, { sessionId, assessment: score }, origin);
   } catch (err) {
-    console.error('Assess error:', err);
-    return respond(500, { error: err.message });
+    // Medium #5: Never expose raw error messages or stack traces to API callers
+    console.error('[assess] Error:', { message: err.message, code: err.code, requestId });
+    return respond(500, { errorCode: 'INTERNAL_ERROR', error: 'An error occurred. Please try again.', requestId }, origin);
   }
 };
 
@@ -110,7 +119,7 @@ function runHeuristicAssessment(config, meta) {
 }
 
 function isLegacyFramework(fw) {
-  return ['struts', 'jsf', 'webforms', 'asp classic', 'coldfusion', 'perl'].some(l => fw.toLowerCase().includes(l));
+  return ['struts', 'jsf', 'webforms', 'asp classic', 'coldfusion', 'perl'].some(l => sanitizeString(fw).toLowerCase().includes(l));
 }
 function isLegacyDep(dep) {
   const name = (typeof dep === 'string' ? dep : dep.name || '').toLowerCase();

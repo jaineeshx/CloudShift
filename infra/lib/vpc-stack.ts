@@ -1,5 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
 
 export class VpcStack extends cdk.Stack {
@@ -21,6 +22,17 @@ export class VpcStack extends cdk.Stack {
       ]
     });
     cdk.Tags.of(this.vpc).add('Project', 'CloudShift');
+
+    // Low #6: VPC Flow Logs — captures all traffic for intrusion detection and forensics
+    const flowLogGroup = new logs.LogGroup(this, 'VpcFlowLogGroup', {
+      logGroupName: '/cloudshift/vpc-flow-logs',
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: cdk.RemovalPolicy.DESTROY
+    });
+    this.vpc.addFlowLog('CloudShiftFlowLog', {
+      destination: ec2.FlowLogDestination.toCloudWatchLogs(flowLogGroup),
+      trafficType: ec2.FlowLogTrafficType.ALL
+    });
 
     // EC2 MySQL source security group
     this.sourceSecurityGroup = new ec2.SecurityGroup(this, 'SourceSG', {
@@ -50,5 +62,13 @@ export class VpcStack extends cdk.Stack {
 
     // Output VPC ID
     new cdk.CfnOutput(this, 'VpcId', { value: this.vpc.vpcId, exportName: 'CloudShiftVpcId' });
+
+    // Low #15: Stack-wide tagging
+    const stackTags: Record<string, string> = {
+      'Project': 'CloudShift',
+      'ManagedBy': 'CDK',
+      'Stack': 'CloudShiftVpc'
+    };
+    Object.entries(stackTags).forEach(([k, v]) => cdk.Tags.of(this).add(k, v));
   }
 }
